@@ -1,10 +1,11 @@
 use crate::eml::*;
 use crate::errors::EmlError;
-use std::fmt;
 use std::fs;
 use std::io;
+use std::path::Path;
 use std::iter::Peekable;
 
+#[derive(Debug)]
 enum LwspState {
     ReadingContent,
     LF,     // Found a line feed (without first seeing a carriage return). EOLs are messed up.
@@ -13,6 +14,7 @@ enum LwspState {
     CRLFCR, // Found a CRLF followed by a new CR
 }
 
+#[derive(Debug)]
 enum InputType {
     CR,
     LF,
@@ -27,7 +29,7 @@ enum BodyHandling {
     All,
 }
 
-//#[derive(Debug)]
+#[derive(Debug)]
 pub struct EmlParser {
     content: String,
     position: usize,
@@ -35,12 +37,6 @@ pub struct EmlParser {
     body_handling: BodyHandling,
 }
 
-impl fmt::Display for EmlParser {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        //write!(f, "EmlParser({}, {})", self.x, self.y)
-        write!(f, "EmlParser(...)")
-    }
-}
 
 impl EmlParser {
     /// Read an .eml file from disk, parsing its contents.
@@ -48,7 +44,8 @@ impl EmlParser {
     /// doesn't provide an iterator over `char` that could give a `Peekable`.
     // One possible TODO is rolling something like https://github.com/C4K3/peekable-reader-rs into
     // this project.
-    pub fn from_file(filename: &str) -> Result<Self, io::Error> {
+    //pub fn from_file(filename: &str) -> Result<Self, io::Error> {
+    pub fn from_file(filename: impl AsRef<Path>) -> Result<Self, io::Error> {
         let content = fs::read_to_string(filename)?;
 
         Ok(EmlParser {
@@ -104,7 +101,7 @@ impl EmlParser {
 
         self.remove_header_body_separator(&mut char_input)?;
 
-        let mut result = Eml::empty();
+        let mut result : Eml = Default::default();
 
         result.body = self.parse_body();
 

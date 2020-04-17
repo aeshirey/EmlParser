@@ -3,3 +3,7 @@
 mod eml;
 mod errors;
 mod parser;
+
+
+pub use parser::EmlParser;
+pub use eml::Eml;

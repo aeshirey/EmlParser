@@ -7,7 +7,6 @@ description = "A library for parsing .eml files."
 readme = "README.md"
 homepage = "https://github.com/aeshirey/EmlParser/"
 repository = "https://github.com/aeshirey/EmlParser/"
-license = "Apache-2.0"
 license-file = "LICENSE"
 keywords = ["eml", "parse", "email-parsing", "email"]
 
