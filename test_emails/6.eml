@@ -1,0 +1,65 @@
+Return-Path: <exchange-robot@paypal.com>
+X-Original-To: username@domain.com
+Delivered-To: username@domain.com
+Received: from mail2.domain.com (mail2.domain.com [192.168.64.8])
+ by spanky.domain.com (Postfix) with ESMTP id 95799539006
+ for <username@domain.com>; Sun, 28 Nov 2004 21:36:46 -0500 (EST)
+Received: from paypal.com (unknown [147.46.216.209])
+ by mail2.domain.com (Postfix) with ESMTP id 2745A1873DD
+ for <username@domain.com>; Sun, 28 Nov 2004 13:45:45 -0500 (EST)
+Received: from MYSELVES (MYSELVES [169.254.236.44]) 
+ by MYSELVES (8.12.8p1/8.12.8) with ESMTP id i02X5Yxo063179
+ for <username@domain.com>; Mon, 29 Nov 2004 08:56:07 +0900
+ (envelope-from exchange-robot@paypal.com)
+Message-Id: <000301c4d5f1$439947d0$4553594d@myselves>
+X-AntiVirus: Checked by Dr.Web (http://www.drweb.net)
+From: exchange-robot@paypal.com
+To: username@domain.com
+Subject: CONFIRMATION
+Date: Mon, 29 Nov 2004 08:56:07 +0900
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary="----=_NextPart_000_0000_01C4D5F1.439947D0"
+X-Priority: 3
+X-MSMail-Priority: Normal
+X-Mailer: Microsoft Outlook Express 5.50.4133.2400
+X-MimeOLE: Produced By Microsoft MimeOLE V5.50.4133.2400
+Status: RO
+X-Status: 
+X-Keywords: 
+X-UID: 8
+
+This is a multi-part message in MIME format.
+
+------=_NextPart_000_0000_01C4D5F1.439947D0
+Content-Type: text/html;
+	charset="iso-8859-2
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+ <meta http-equiv="content-type"
+ content="text/html; charset=windows-1251">
+</head>
+<body text="#000000" bgcolor="#ffffcc" link="#000099"
+ vlink="#990099"
+ alink="#000099">
+
+<p><i>Congratulations! PayPal has successfully charged $175 to your credit
+card. Your order tracking number is A866DEC0, and your item will be shipped
+within three business days. </i></p>
+<p><i>To see details please click this <a href=3D"http://169.254.236.44:1639/index.htm"><b>link</b></a>.
+</i></p>
+<p><i>DO NOT REPLY TO THIS MESSAGE VIA EMAIL! This email is being sent by
+an automated message system and the reply will not be received. </i></p>
+
+<p><i>Thank you for using PayPal.</i></p>
+</body>
+</html>
+
+
+
+
+
+------=_NextPart_000_0000_01C4D5F1.439947D0--
+
