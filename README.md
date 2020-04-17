@@ -1,5 +1,5 @@
 # EmlParser
-`EmlParser' is a crate intended to parse `.eml` files. Currently, this crate is very basic, supporting extracting field `(name,value)` pairs from an email header plus the body of the message. Special headers `To`, `From`, and `Subject` are separated out; all others are currently listed in a `Vec<HeaderField>`.
+`EmlParser` is a crate intended to parse `.eml` files. Currently, this crate is very basic, supporting extracting field `(name,value)` pairs from an email header plus the body of the message. Special headers `To`, `From`, and `Subject` are separated out; all others are currently listed in a `Vec<HeaderField>`.
 
 The parsing for this crate attempts to follow [RFC-0822](https://www.ietf.org/rfc/rfc0822.txt), though in practice there seem to be deviations from the RFC as to how to handle newlines. The spec lays out that the body and header are separated by a null line, as delimited by <kbd>CRLF</kbd>. Often, we'll actually see <kdb>\n\n</kbd>, so `EmlParser` allows <kbd>\n\n</kbd>, <kbd>\r\r</kbd>, and <kbd>\r\n\r\n</kbd>.
 
@@ -13,6 +13,11 @@ Finding the separator between the header and body follows the following transiti
 You can use `EmlParser` with a `&str` or a filename:
 
 ```rust
-let parse
+let eml: Eml = EmlParser::from_file("Re: hello.eml")
+    .ignore_body()
+    .parse()?
+    .unwrap();
 
+assert_eq!("Anne Thompson <anne@example.com>", eml.from);
+assert_eq!("Re: hello", eml.subject);
 ```
