@@ -7,7 +7,7 @@ Note that header fields _are_ able to include newlines in them, defined as [line
 
 Finding the separator between the header and body follows the following transition digram:
 
-![Transition diagram for detecting the header/body delimiter](https://github.com/aeshirey/EmlParser/transition_graph.png)
+![Transition diagram for detecting the header/body delimiter](https://raw.githubusercontent.com/aeshirey/EmlParser/master/transition_graph.png)
 
 # Usage
 You can use `EmlParser` with a `&str` or a filename:
