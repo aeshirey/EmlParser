@@ -79,7 +79,7 @@ impl EmlParser {
         self
     }
 
-    pub fn parse(&mut self) -> Result<Option<Eml>, EmlError> {
+    pub fn parse(&mut self) -> Result<Eml, EmlError> {
         if self.content.is_empty() {
             Err(EmlError::UnexpectedEndOfStream(String::from("Empty input")))
         } else {
@@ -89,7 +89,7 @@ impl EmlParser {
 
             let eml = self.parse_email(&mut char_input)?;
 
-            Ok(Some(eml))
+            Ok(eml)
         }
     }
 
