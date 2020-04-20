@@ -1,5 +1,5 @@
 [package]
-name = "EmlParser"
+name = "eml-parser"
 version = "0.1.0"
 authors = ["Adam Shirey <adam.shirey@gmail.com>"]
 edition = "2018"

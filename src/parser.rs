@@ -2,8 +2,8 @@ use crate::eml::*;
 use crate::errors::EmlError;
 use std::fs;
 use std::io;
-use std::path::Path;
 use std::iter::Peekable;
+use std::path::Path;
 
 #[derive(Debug)]
 enum LwspState {
@@ -36,7 +36,6 @@ pub struct EmlParser {
 
     body_handling: BodyHandling,
 }
-
 
 impl EmlParser {
     /// Read an .eml file from disk, parsing its contents.
@@ -81,16 +80,15 @@ impl EmlParser {
 
     pub fn parse(&mut self) -> Result<Eml, EmlError> {
         if self.content.is_empty() {
-            Err(EmlError::UnexpectedEndOfStream(String::from("Empty input")))
-        } else {
-            let content = self.content.to_string(); // making a copy so we can have a mutable reference
-            let chars = content.chars();
-            let mut char_input = chars.peekable();
-
-            let eml = self.parse_email(&mut char_input)?;
-
-            Ok(eml)
+            return Err(EmlError::UnexpectedEndOfStream(String::from("Empty input")));
         }
+
+        let content = self.content.to_string(); // making a copy so we can have a mutable reference
+        let chars = content.chars();
+        let mut char_input = chars.peekable();
+        let eml = self.parse_email(&mut char_input)?;
+
+        Ok(eml)
     }
 
     fn parse_email<T: Iterator<Item = char>>(
@@ -101,8 +99,7 @@ impl EmlParser {
 
         self.remove_header_body_separator(&mut char_input)?;
 
-        let mut result : Eml = Default::default();
-
+        let mut result = Eml::default();
         result.body = self.parse_body();
 
         let mut to = Vec::new();
@@ -475,7 +472,6 @@ This is the start of the body
         let expected = &"This is the start of the body\n"[0..15];
         assert_eq!(expected, body);
     }
-
 
     #[test]
     fn basic_test_with_truncation_gt_body_length() {
