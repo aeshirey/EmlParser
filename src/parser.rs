@@ -1,5 +1,6 @@
 use crate::eml::*;
 use crate::errors::EmlError;
+use regex::Regex;
 use std::fs;
 use std::io;
 use std::iter::Peekable;
@@ -95,7 +96,7 @@ impl EmlParser {
         &mut self,
         mut char_input: &mut Peekable<T>,
     ) -> Result<Eml, EmlError> {
-        let headers = self.parse_header(&mut char_input)?;
+        let headers = self.parse_header_field(&mut char_input)?;
 
         self.remove_header_body_separator(&mut char_input)?;
 
@@ -105,10 +106,12 @@ impl EmlParser {
         let mut to = Vec::new();
 
         for header in headers {
-            match &header.field_name[..] {
-                "To" => to.push(header.field_value.to_string()),
-                "From" => result.from = Some(header.field_value),
-                "Subject" => result.subject = Some(header.field_value),
+            match (&header.name[..], &header.value) {
+                ("To", _) => to.push(header.value),
+                ("From", _) => result.from = Some(header.value),
+                ("Subject", HeaderFieldValue::Unstructured(subj)) => {
+                    result.subject = Some((*subj).to_string())
+                }
                 _ => result.headers.push(header),
             }
         }
@@ -120,22 +123,69 @@ impl EmlParser {
         Ok(result)
     }
 
-    fn parse_header<T: Iterator<Item = char>>(
+    fn parse_header_field<T: Iterator<Item = char>>(
         &mut self,
         mut char_input: &mut Peekable<T>,
     ) -> Result<Vec<HeaderField>, EmlError> {
+        use HeaderFieldValue::*;
         let mut headers = Vec::new();
 
-        while let Some(hf) = self.read_header_field(&mut char_input)? {
-            headers.push(hf);
+        while let Some((name, value)) = self.read_raw_header_field(&mut char_input)? {
+            // Attempt to structure this header value
+            let value = match (&name[..], value) {
+                ("To", v) | ("Reply-To", v) | ("Delivered-To", v) | ("X-Original-To", v) => {
+                    EmlParser::parse_email_address(v)
+                }
+                (_, v) if v.is_empty() => Empty,
+                (_, v) => Unstructured(v),
+            };
+            headers.push(HeaderField { name, value });
         }
         Ok(headers)
     }
 
-    fn read_header_field<T: Iterator<Item = char>>(
+    fn parse_email_address(value: String) -> HeaderFieldValue {
+        // Email address header values can span multiple lines. Clean those up first
+        let mut remaining = value.replace("\n", "").replace("\r", "");
+
+        let mut found_addresses = Vec::new();
+
+        let name_addr_re = Regex::new(r#""(.?+)" <\s*([^>]+)\s*>[ ,]*"#).unwrap();
+        let addr_re = Regex::new(r#"<\s*([^>]+)\s*>[ ,]*"#).unwrap();
+
+        while !remaining.is_empty() {
+            if let Some(cap) = name_addr_re.captures(&remaining) {
+                let name = cap.get(1).unwrap().as_str().to_string();
+                let address = cap.get(2).unwrap().as_str().to_string();
+                found_addresses.push(EmailAddress::NameAndEmailAddress { name, address });
+
+                remaining = remaining[cap.get(0).unwrap().as_str().len()..].to_string();
+            } else if let Some(cap) = addr_re.captures(&remaining) {
+                let address = cap.get(1).unwrap().as_str().to_string();
+                found_addresses.push(EmailAddress::AddressOnly { address });
+                remaining = remaining[cap.get(0).unwrap().as_str().len()..].to_string();
+            } else {
+                // Something weird
+                return HeaderFieldValue::Unstructured(value);
+                //panic!(
+                //"Couldn't figure out how to parse email: <<< {} >>>\n\nLeft with: '{}'",
+                //value, remaining
+                //);
+            }
+        }
+
+        //match found_addresses {
+        if found_addresses.len() == 1 {
+            HeaderFieldValue::SingleEmailAddress(found_addresses.into_iter().next().unwrap())
+        } else {
+            HeaderFieldValue::MultipleEmailAddresses(found_addresses)
+        }
+    }
+
+    fn read_raw_header_field<T: Iterator<Item = char>>(
         &mut self,
         mut char_input: &mut Peekable<T>,
-    ) -> Result<Option<HeaderField>, EmlError> {
+    ) -> Result<Option<(String, String)>, EmlError> {
         match char_input.peek() {
             Some('\n') | Some('\r') => return Ok(None), // finding a CR or LF when looking for a header means the body is about to start
             Some(_) => {}
@@ -146,7 +196,7 @@ impl EmlParser {
             }
         };
 
-        if let Some(field_name) = self.read_field_name(&mut char_input)? {
+        if let Some(name) = self.read_field_name(&mut char_input)? {
             match char_input.peek() {
                 Some(':') => {
                     self.position += 1;
@@ -155,13 +205,13 @@ impl EmlParser {
                 Some(c) => {
                     return Err(EmlError::UnexpectedContent(format!(
                         "Expected ':' to terminate header field '{}'; got '{}' (byte value {})",
-                        field_name, c, *c as u8
+                        name, c, *c as u8
                     )))
                 }
                 None => {
                     return Err(EmlError::UnexpectedEndOfStream(format!(
                         "Expected ':' to terminate header field '{}'",
-                        field_name
+                        name
                     )))
                 }
             };
@@ -175,18 +225,14 @@ impl EmlParser {
                 None => {
                     return Err(EmlError::UnexpectedEndOfStream(format!(
                         "Expected non-empty content for header field '{}'",
-                        field_name
+                        name
                     )))
                 }
             };
 
-            let field_value = self.read_field_body(&mut char_input)?;
+            let value = self.read_field_body(&mut char_input)?;
 
-            let hf = HeaderField {
-                field_name,
-                field_value,
-            };
-            Ok(Some(hf))
+            Ok(Some((name, value)))
         } else {
             Ok(None)
         }
@@ -433,10 +479,9 @@ This is the start of the body
     fn basic_test() {
         let eml = EmlParser::from_string(TEST_HEADER.to_string())
             .with_body()
-            .parse()
-            .unwrap();
+            .parse();
 
-        assert!(eml.is_some());
+        assert!(eml.is_ok());
         let eml = eml.unwrap();
 
         //println!("{:?}", eml);
@@ -444,15 +489,21 @@ This is the start of the body
         assert_eq!(5, eml.headers.len());
 
         let delivered_to: &HeaderField = &eml.headers[0];
-        assert_eq!("Delivered-To", delivered_to.field_name);
-        assert_eq!("john.public@example.com", delivered_to.field_value);
+        assert_eq!("Delivered-To", delivered_to.name);
+        assert_eq!(
+            HeaderFieldValue::Unstructured("john.public@example.com".to_string()),
+            delivered_to.value
+        );
 
         let received: &HeaderField = &eml.headers[1];
-        assert_eq!("Received", received.field_name);
+        assert_eq!("Received", received.name);
         assert_eq!(
-            r#"by 2002:ac9:700e:0:0:0:0:0 with SMTP id w14csp4493771ocr;
-        Mon, 13 Apr 2020 14:04:07 -0700 (PDT)"#,
-            received.field_value
+            HeaderFieldValue::Unstructured(
+                r#"by 2002:ac9:700e:0:0:0:0:0 with SMTP id w14csp4493771ocr;
+        Mon, 13 Apr 2020 14:04:07 -0700 (PDT)"#
+                    .to_string()
+            ),
+            received.value
         );
 
         assert!(eml.body.is_some());
@@ -465,8 +516,7 @@ This is the start of the body
         let eml: Eml = EmlParser::from_string(TEST_HEADER.to_string())
             .with_body_preview(15)
             .parse()
-            .unwrap() // Result
-            .unwrap(); // Option
+            .unwrap(); // Result
 
         let body = eml.body.unwrap();
         let expected = &"This is the start of the body\n"[0..15];
@@ -478,10 +528,25 @@ This is the start of the body
         let eml: Eml = EmlParser::from_string(TEST_HEADER.to_string())
             .with_body_preview(150)
             .parse()
-            .unwrap() // Result
-            .unwrap(); // Option
+            .unwrap(); // Result
 
         let body = eml.body.unwrap();
         assert_eq!("This is the start of the body\n", body);
+    }
+
+    #[test]
+    fn parse_emails() {
+        let parsed =
+            EmlParser::parse_email_address(r#""John Smith" <jsmith@example.com>"#.to_string());
+
+        println!("{:?}", parsed);
+
+        let jsmith = EmailAddress::NameAndEmailAddress {
+            name: "John Smith".to_string(),
+            address: "jsmith@example.com".to_string(),
+        };
+        let expected = HeaderFieldValue::SingleEmailAddress(jsmith);
+
+        assert_eq!(parsed, expected);
     }
 }
