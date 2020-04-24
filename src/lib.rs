@@ -4,5 +4,5 @@ mod eml;
 mod errors;
 mod parser;
 
-pub use eml::Eml;
+pub use eml::*;
 pub use parser::EmlParser;
