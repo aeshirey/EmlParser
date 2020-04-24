@@ -549,4 +549,23 @@ This is the start of the body
 
         assert_eq!(parsed, expected);
     }
+
+    #[test]
+    fn parse_and_display_emails() {
+        let single = r#""John Q. Public" < john@example.com>, "#.to_string();
+        let parsed = EmlParser::parse_email_address(single);
+
+        match &parsed {
+            HeaderFieldValue::SingleEmailAddress(EmailAddress::NameAndEmailAddress {
+                name,
+                address,
+            }) => {
+                assert_eq!(name, "John Q. Public");
+                assert_eq!(address, "john@example.com");
+            }
+            _ => panic!("Expected SingleEmailAddress, got something else"),
+        };
+
+        assert_eq!(parsed.to_string(), r#""John Q. Public" <john@example.com>"#);
+    }
 }
