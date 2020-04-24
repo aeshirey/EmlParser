@@ -103,21 +103,15 @@ impl EmlParser {
         let mut result = Eml::default();
         result.body = self.parse_body();
 
-        let mut to = Vec::new();
-
         for header in headers {
             match (&header.name[..], &header.value) {
-                ("To", _) => to.push(header.value),
+                ("To", _) => result.to = Some(header.value),
                 ("From", _) => result.from = Some(header.value),
                 ("Subject", HeaderFieldValue::Unstructured(subj)) => {
                     result.subject = Some((*subj).to_string())
                 }
                 _ => result.headers.push(header),
             }
-        }
-
-        if !to.is_empty() {
-            result.to = Some(to);
         }
 
         Ok(result)
@@ -484,8 +478,6 @@ This is the start of the body
         assert!(eml.is_ok());
         let eml = eml.unwrap();
 
-        //println!("{:?}", eml);
-
         assert_eq!(5, eml.headers.len());
 
         let delivered_to: &HeaderField = &eml.headers[0];
@@ -538,8 +530,6 @@ This is the start of the body
     fn parse_emails() {
         let parsed =
             EmlParser::parse_email_address(r#""John Smith" <jsmith@example.com>"#.to_string());
-
-        println!("{:?}", parsed);
 
         let jsmith = EmailAddress::NameAndEmailAddress {
             name: "John Smith".to_string(),

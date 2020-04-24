@@ -24,7 +24,7 @@ pub enum HeaderFieldValue {
 pub struct Eml {
     pub headers: Vec<HeaderField>,
     pub from: Option<HeaderFieldValue>,
-    pub to: Option<Vec<HeaderFieldValue>>,
+    pub to: Option<HeaderFieldValue>,
     pub subject: Option<String>,
     pub body: Option<String>,
 }
@@ -55,7 +55,7 @@ impl fmt::Display for HeaderFieldValue {
                     }
                     combined.push_str(&a.to_string());
                 });
-                write!(f, "{}", &combined.to_string())
+                write!(f, "{}", &combined)
             }
             HeaderFieldValue::Unstructured(s) => write!(f, "{}", s),
             HeaderFieldValue::Empty => write!(f, ""),
