@@ -9,6 +9,12 @@ homepage = "https://github.com/aeshirey/EmlParser/"
 repository = "https://github.com/aeshirey/EmlParser/"
 license-file = "LICENSE"
 keywords = ["eml", "parse", "email-parsing", "email"]
+exclude = [
+	"test_emails/*",
+	"src/main.rs",
+	"dfa_definition.txt",
+	"transition_graph.png",
+]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
