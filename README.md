@@ -18,6 +18,11 @@ let eml: Eml = EmlParser::from_file("Re: hello.eml")
     .parse()?
     .unwrap();
 
-assert_eq!("Anne Thompson <anne@example.com>", eml.from);
+let expected = SingleEmailAddress(NameAndEmailAddress {
+    name: "Anne Thompson".to_string(),
+    address: "anne@example.com".to_string(),
+});
+
+assert_eq!(expected, eml.from);
 assert_eq!("Re: hello", eml.subject);
 ```

@@ -127,9 +127,12 @@ impl EmlParser {
         while let Some((name, value)) = self.read_raw_header_field(&mut char_input)? {
             // Attempt to structure this header value
             let value = match (&name[..], value) {
-                ("From", v)| ("To", v) | ("Reply-To", v) | ("Delivered-To", v) | ("X-Original-To", v) | ("Return-Path", v) => {
-                    EmlParser::parse_email_address(v)
-                }
+                ("From", v)
+                | ("To", v)
+                | ("Reply-To", v)
+                | ("Delivered-To", v)
+                | ("X-Original-To", v)
+                | ("Return-Path", v) => EmlParser::parse_email_address(v),
                 (_, v) if v.is_empty() => Empty,
                 (_, v) => Unstructured(v),
             };
@@ -147,7 +150,6 @@ impl EmlParser {
         let name_addr_re = Regex::new(r#"^"(.?+)" <\s*([^>]+)\s*>[ ,]*"#).unwrap(); // for matching: "John Smith" <jsmith@example.com>
         let addr_re1 = Regex::new(r#"^\s*<\s*([^>]+)\s*>[ ,]*"#).unwrap(); // for matching the email in brackets without name: <jsmith@example.com>
         let addr_re2 = Regex::new(r#"^\s*([^"<>@]+@[^"<>@\s,]+)[ ,]*"#).unwrap(); // for matching the email without brackets: jsmith@example.com
-
 
         while !remaining.is_empty() {
             if let Some(cap) = name_addr_re.captures(&remaining) {
