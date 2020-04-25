@@ -127,7 +127,7 @@ impl EmlParser {
         while let Some((name, value)) = self.read_raw_header_field(&mut char_input)? {
             // Attempt to structure this header value
             let value = match (&name[..], value) {
-                ("To", v) | ("Reply-To", v) | ("Delivered-To", v) | ("X-Original-To", v) => {
+                ("From", v)| ("To", v) | ("Reply-To", v) | ("Delivered-To", v) | ("X-Original-To", v) | ("Return-Path", v) => {
                     EmlParser::parse_email_address(v)
                 }
                 (_, v) if v.is_empty() => Empty,
@@ -144,8 +144,10 @@ impl EmlParser {
 
         let mut found_addresses = Vec::new();
 
-        let name_addr_re = Regex::new(r#""(.?+)" <\s*([^>]+)\s*>[ ,]*"#).unwrap();
-        let addr_re = Regex::new(r#"<\s*([^>]+)\s*>[ ,]*"#).unwrap();
+        let name_addr_re = Regex::new(r#"^"(.?+)" <\s*([^>]+)\s*>[ ,]*"#).unwrap(); // for matching: "John Smith" <jsmith@example.com>
+        let addr_re1 = Regex::new(r#"^\s*<\s*([^>]+)\s*>[ ,]*"#).unwrap(); // for matching the email in brackets without name: <jsmith@example.com>
+        let addr_re2 = Regex::new(r#"^\s*([^"<>@]+@[^"<>@\s,]+)[ ,]*"#).unwrap(); // for matching the email without brackets: jsmith@example.com
+
 
         while !remaining.is_empty() {
             if let Some(cap) = name_addr_re.captures(&remaining) {
@@ -153,18 +155,23 @@ impl EmlParser {
                 let address = cap.get(2).unwrap().as_str().to_string();
                 found_addresses.push(EmailAddress::NameAndEmailAddress { name, address });
 
-                remaining = remaining[cap.get(0).unwrap().as_str().len()..].to_string();
-            } else if let Some(cap) = addr_re.captures(&remaining) {
+                let entire_match = cap.get(0).unwrap();
+                remaining = remaining[entire_match.end()..].to_string();
+            } else if let Some(cap) = addr_re1.captures(&remaining) {
                 let address = cap.get(1).unwrap().as_str().to_string();
                 found_addresses.push(EmailAddress::AddressOnly { address });
-                remaining = remaining[cap.get(0).unwrap().as_str().len()..].to_string();
+
+                let entire_match = cap.get(0).unwrap();
+                remaining = remaining[entire_match.end()..].to_string();
+            } else if let Some(cap) = addr_re2.captures(&remaining) {
+                let address = cap.get(1).unwrap().as_str().to_string();
+                found_addresses.push(EmailAddress::AddressOnly { address });
+
+                let entire_match = cap.get(0).unwrap();
+                remaining = remaining[entire_match.end()..].to_string();
             } else {
                 // Something weird
                 return HeaderFieldValue::Unstructured(value);
-                //panic!(
-                //"Couldn't figure out how to parse email: <<< {} >>>\n\nLeft with: '{}'",
-                //value, remaining
-                //);
             }
         }
 
