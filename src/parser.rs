@@ -492,7 +492,9 @@ This is the start of the body
         let delivered_to: &HeaderField = &eml.headers[0];
         assert_eq!("Delivered-To", delivered_to.name);
         assert_eq!(
-            HeaderFieldValue::Unstructured("john.public@example.com".to_string()),
+            HeaderFieldValue::SingleEmailAddress(EmailAddress::AddressOnly {
+                address: ("john.public@example.com".to_string())
+            }),
             delivered_to.value
         );
 
