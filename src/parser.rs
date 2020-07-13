@@ -2,7 +2,7 @@ use crate::eml::*;
 use crate::errors::EmlError;
 use regex::Regex;
 use std::fs;
-use std::io;
+//use std::io;
 use std::iter::Peekable;
 use std::path::Path;
 
@@ -44,8 +44,7 @@ impl EmlParser {
     /// doesn't provide an iterator over `char` that could give a `Peekable`.
     // One possible TODO is rolling something like https://github.com/C4K3/peekable-reader-rs into
     // this project.
-    //pub fn from_file(filename: &str) -> Result<Self, io::Error> {
-    pub fn from_file(filename: impl AsRef<Path>) -> Result<Self, io::Error> {
+    pub fn from_file(filename: impl AsRef<Path>) -> Result<Self, EmlError> {
         let content = fs::read_to_string(filename)?;
 
         Ok(EmlParser {
@@ -568,5 +567,15 @@ This is the start of the body
         };
 
         assert_eq!(parsed.to_string(), r#""John Q. Public" <john@example.com>"#);
+    }
+
+    #[test]
+    fn test_errors() {
+        let filename = "nonexistent.eml";
+        let parsed = EmlParser::from_file(filename);
+        assert!(parsed.is_err());
+
+        let errval = parsed.unwrap_err();
+        assert!(matches!(errval, EmlError::IoError(_inner)));
     }
 }
