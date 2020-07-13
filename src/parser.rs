@@ -2,7 +2,6 @@ use crate::eml::*;
 use crate::errors::EmlError;
 use regex::Regex;
 use std::fs;
-//use std::io;
 use std::iter::Peekable;
 use std::path::Path;
 
