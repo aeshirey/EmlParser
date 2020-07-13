@@ -6,12 +6,12 @@ use std::io;
 pub enum EmlError {
     UnexpectedEndOfStream(String),
     UnexpectedContent(String),
-    IoError,
+    IoError(std::io::Error),
 }
 
 impl From<io::Error> for EmlError {
-    fn from(_: io::Error) -> Self {
-        EmlError::IoError
+    fn from(inner: io::Error) -> Self {
+        EmlError::IoError(inner)
     }
 }
 
@@ -20,7 +20,7 @@ impl fmt::Display for EmlError {
         match self {
             EmlError::UnexpectedEndOfStream(s) => write!(f, "Unexpected end of stream: {}", s),
             EmlError::UnexpectedContent(s) => write!(f, "Unexpected content: {}", s),
-            EmlError::IoError => write!(f, "IO error"),
+            EmlError::IoError(inner) => write!(f, "IO error: {}", inner),
         }
     }
 }
