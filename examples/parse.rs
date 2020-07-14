@@ -1,8 +1,5 @@
-mod eml;
-mod errors;
-mod parser;
-use crate::errors::EmlError;
-use crate::parser::EmlParser;
+use eml_parser::errors::EmlError;
+use eml_parser::parser::EmlParser;
 
 fn main() -> Result<(), EmlError> {
     let mut eml = EmlParser::from_file("test_emails/0.eml")?;

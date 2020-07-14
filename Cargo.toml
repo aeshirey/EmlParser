@@ -11,7 +11,6 @@ license-file = "LICENSE"
 keywords = ["eml", "parse", "email-parsing", "email"]
 exclude = [
 	"test_emails/*",
-	"src/main.rs",
 	"dfa_definition.txt",
 	"transition_graph.png",
 ]
