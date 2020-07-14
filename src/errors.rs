@@ -25,4 +25,11 @@ impl fmt::Display for EmlError {
     }
 }
 
-impl error::Error for EmlError {}
+impl error::Error for EmlError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            EmlError::IoError(inner) => Some(inner),
+            _ => None,
+        }
+    }
+}
