@@ -386,9 +386,13 @@ impl EmlParser {
 
         self.position = end_position;
 
-        Ok(String::from(
-            &self.content[start_position..end_position - 1],
-        ))
+        if start_position == end_position {
+            Ok(String::new())
+        } else {
+            Ok(String::from(
+                &self.content[start_position..end_position - 1],
+            ))
+        }
     }
 
     fn remove_header_body_separator<T: Iterator<Item = char>>(
@@ -463,6 +467,7 @@ impl EmlParser {
 
 #[cfg(test)]
 mod tests {
+    use super::HeaderFieldValue;
     use super::*;
 
     const TEST_HEADER: &str = r#"Delivered-To: john.public@example.com
@@ -576,5 +581,27 @@ This is the start of the body
 
         let errval = parsed.unwrap_err();
         assert!(matches!(errval, EmlError::IoError(_inner)));
+    }
+
+    #[test]
+    fn last_header_empty() {
+        let eml: Eml = EmlParser::from_string("Foo: ok\nBar: \n\nHello".to_string())
+            .with_body()
+            .parse()
+            .unwrap();
+
+        assert_eq!(2, eml.headers.len());
+
+        let foo = &eml.headers[0];
+        let HeaderField { name, value } = foo;
+        assert_eq!("Foo", name);
+        assert_eq!(&HeaderFieldValue::Unstructured("ok".to_string()), value);
+
+        let bar = &eml.headers[1];
+        let HeaderField { name, value } = bar;
+        assert_eq!("Bar", name);
+        assert_eq!(&HeaderFieldValue::Empty, value);
+
+        assert_eq!(Some("Hello".to_string()), eml.body);
     }
 }
