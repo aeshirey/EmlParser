@@ -5,6 +5,7 @@ use std::fs;
 use std::iter::Peekable;
 use std::path::Path;
 
+#[allow(non_camel_case_types)]
 #[derive(Debug)]
 enum LwspState {
     ReadingContent,
@@ -12,6 +13,9 @@ enum LwspState {
     CR,     // Found a carriage return
     CRLF,   // Found a carriage return followed by a line feed
     CRLFCR, // Found a CRLF followed by a new CR
+    EndOfHeader_LFLF,
+    EndOfHeader_CRCR,
+    EndOfHeader_CRLFCRLF,
 }
 
 #[derive(Debug)]
@@ -94,9 +98,9 @@ impl EmlParser {
         &mut self,
         mut char_input: &mut Peekable<T>,
     ) -> Result<Eml, EmlError> {
-        let headers = self.parse_header_field(&mut char_input)?;
+        let headers = self.parse_header_fields(&mut char_input)?;
 
-        self.remove_header_body_separator(&mut char_input)?;
+        //self.remove_header_body_separator(&mut char_input)?;
 
         let mut result = Eml::default();
         result.body = self.parse_body();
@@ -115,14 +119,14 @@ impl EmlParser {
         Ok(result)
     }
 
-    fn parse_header_field<T: Iterator<Item = char>>(
+    fn parse_header_fields<T: Iterator<Item = char>>(
         &mut self,
         mut char_input: &mut Peekable<T>,
     ) -> Result<Vec<HeaderField>, EmlError> {
         use HeaderFieldValue::*;
         let mut headers = Vec::new();
 
-        while let Some((name, value)) = self.read_raw_header_field(&mut char_input)? {
+        while let Some((name, value, eoh)) = self.read_raw_header_field(&mut char_input)? {
             // Attempt to structure this header value
             let value = match (&name[..], value) {
                 ("From", v)
@@ -135,6 +139,10 @@ impl EmlParser {
                 (_, v) => Unstructured(v),
             };
             headers.push(HeaderField { name, value });
+
+            if eoh {
+                break;
+            }
         }
         Ok(headers)
     }
@@ -186,7 +194,7 @@ impl EmlParser {
     fn read_raw_header_field<T: Iterator<Item = char>>(
         &mut self,
         mut char_input: &mut Peekable<T>,
-    ) -> Result<Option<(String, String)>, EmlError> {
+    ) -> Result<Option<(String, String, bool)>, EmlError> {
         match char_input.peek() {
             Some('\n') | Some('\r') => return Ok(None), // finding a CR or LF when looking for a header means the body is about to start
             Some(_) => {}
@@ -231,9 +239,9 @@ impl EmlParser {
                 }
             };
 
-            let value = self.read_field_body(&mut char_input)?;
+            let (value, eoh) = self.read_field_body(&mut char_input)?;
 
-            Ok(Some((name, value)))
+            Ok(Some((name, value, eoh)))
         } else {
             Ok(None)
         }
@@ -276,7 +284,7 @@ impl EmlParser {
     fn read_field_body<T: Iterator<Item = char>>(
         &mut self,
         char_input: &mut Peekable<T>,
-    ) -> Result<String, EmlError> {
+    ) -> Result<(String, bool), EmlError> {
         let start_position = self.position;
         let mut end_position = self.position;
         let mut state = LwspState::ReadingContent;
@@ -325,17 +333,25 @@ impl EmlParser {
                     break;
                 }
 
-                (LwspState::LF, InputType::LF) | (LwspState::CR, InputType::CR) => {
-                    // Two line feeds or two carriage returns should signal the end of the header.
-                    // Subtract out the last CR or LF from the input
-                    end_position -= 1;
+                (LwspState::LF, InputType::LF) => {
+                    // Found the end of the header in the form of LF + LF
+                    state = LwspState::EndOfHeader_LFLF;
+                    char_input.next();
+                    end_position += 1;
                     break;
                 }
-
+                (LwspState::CR, InputType::CR) => {
+                    // Found the end of the header in the form of CR + CR
+                    state = LwspState::EndOfHeader_CRCR;
+                    char_input.next();
+                    end_position += 1;
+                    break;
+                }
                 (LwspState::CRLFCR, InputType::LF) => {
-                    // CRLF + CRLF should similarly signal the end of the header, but we have to
-                    // subtract out three characters from the input
-                    end_position -= 3;
+                    // Found the end of the header in the form of CRLF + CRLF
+                    state = LwspState::EndOfHeader_CRLFCRLF;
+                    char_input.next();
+                    end_position += 1;
                     break;
                 }
 
@@ -381,56 +397,40 @@ impl EmlParser {
                         "Found LF+CR in header as line delimeter",
                     )));
                 }
+
+                // These match arms won't be hit because we only set the state above before breaking from the loop
+                (LwspState::EndOfHeader_LFLF, _)
+                | (LwspState::EndOfHeader_CRCR, _)
+                | (LwspState::EndOfHeader_CRLFCRLF, _) => unreachable!(),
             }
         }
 
         self.position = end_position;
 
-        if start_position == end_position {
-            Ok(String::new())
-        } else {
-            Ok(String::from(
-                &self.content[start_position..end_position - 1],
-            ))
-        }
-    }
-
-    fn remove_header_body_separator<T: Iterator<Item = char>>(
-        &mut self,
-        char_input: &mut Peekable<T>,
-    ) -> Result<(), EmlError> {
-        // Read off and advance self.position for the null line separating the header from the
-        // body. The RFC says CRLF is the line separator, but we're allowing CRCR, LFLF, and
-        // CRLFCRLF. Anything else is currently an error
-        let mut state = LwspState::ReadingContent;
-
-        while let Some(next_char) = char_input.peek() {
-            let ws = EmlParser::next_char_type(*next_char);
-
-            state = match (&state, ws) {
-                (LwspState::ReadingContent, InputType::LF) => LwspState::LF,
-                (LwspState::ReadingContent, InputType::CR) => LwspState::CR,
-                (LwspState::LF, InputType::LF) => break, // acceptable path: LFLF
-                (LwspState::CR, InputType::CR) => break, // acceptable path: CRCR
-                (LwspState::CR, InputType::LF) => LwspState::CRLF,
-                (LwspState::CRLF, InputType::CR) => LwspState::CRLFCR,
-                (LwspState::CRLFCR, InputType::LF) => break, // acceptable path: CRLF+CRLF
-                (_, _) => {
-                    return Err(EmlError::UnexpectedContent(String::from(
-                        "Unexpected line ending combination separating the header and body",
-                    )))
-                }
+        // Depending on the state (end of individual header value or the full thing, type of line ending), the return value
+        // has a different end position
+        let value_end = end_position
+            - match state {
+                LwspState::LF => 1,
+                LwspState::CR => 1,
+                LwspState::CRLF => 2,
+                LwspState::EndOfHeader_LFLF => 2,
+                LwspState::EndOfHeader_CRCR => 2,
+                LwspState::EndOfHeader_CRLFCRLF => 4,
+                LwspState::ReadingContent | LwspState::CRLFCR => unreachable!(),
             };
-        }
 
-        // Advance the position as appropriate
-        self.position += match &state {
-            LwspState::CR | LwspState::LF => 2,
-            LwspState::CRLFCR => 4,
-            _ => unreachable!(),
+        let end_of_header = match state {
+            LwspState::EndOfHeader_LFLF
+            | LwspState::EndOfHeader_CRCR
+            | LwspState::EndOfHeader_CRLFCRLF => true,
+            _ => false,
         };
 
-        Ok(())
+        Ok((
+            String::from(&self.content[start_position..value_end]),
+            end_of_header,
+        ))
     }
 
     fn next_char_type(c: char) -> InputType {
@@ -512,6 +512,30 @@ This is the start of the body
             received.value
         );
 
+        assert_eq!("X-Google-Smtp-Source".to_string(), eml.headers[2].name);
+        assert_eq!(
+            HeaderFieldValue::Unstructured(
+                "APiQypIbRnWumT0t4TOJHlvDOVkxfqZ8A8HBzdR39kgdjVQQfKUsY/DkKFeZI53Ux1Z3reMRqaCl"
+                    .to_string()
+            ),
+            eml.headers[2].value
+        );
+
+        assert_eq!("X-Received".to_string(), eml.headers[3].name);
+        assert_eq!(
+            HeaderFieldValue::Unstructured(
+                r#"by 2002:a37:aa8e:: with SMTP id t136mr9744838qke.175.1586811847065;
+        Mon, 13 Apr 2020 14:04:07 -0700 (PDT)"#.to_string()
+            ),
+            eml.headers[3].value
+        );
+
+        assert_eq!("foo".to_string(), eml.headers[4].name);
+        assert_eq!(
+            HeaderFieldValue::Unstructured("bar".to_string()),
+            eml.headers[4].value
+        );
+
         assert!(eml.body.is_some());
         let body = eml.body.unwrap();
         assert_eq!("This is the start of the body\n", body);
@@ -535,6 +559,8 @@ This is the start of the body
             .with_body_preview(150)
             .parse()
             .unwrap(); // Result
+
+        assert_eq!(5, eml.headers.len());
 
         let body = eml.body.unwrap();
         assert_eq!("This is the start of the body\n", body);
@@ -601,6 +627,28 @@ This is the start of the body
         let HeaderField { name, value } = bar;
         assert_eq!("Bar", name);
         assert_eq!(&HeaderFieldValue::Empty, value);
+
+        assert_eq!(Some("Hello".to_string()), eml.body);
+    }
+
+    #[test]
+    fn last_header_get_full_value() {
+        let eml: Eml = EmlParser::from_string("Foo: ok\nBar: super\n\nHello".to_string())
+            .with_body()
+            .parse()
+            .unwrap();
+
+        assert_eq!(2, eml.headers.len());
+
+        let foo = &eml.headers[0];
+        let HeaderField { name, value } = foo;
+        assert_eq!("Foo", name);
+        assert_eq!(&HeaderFieldValue::Unstructured("ok".to_string()), value);
+
+        let bar = &eml.headers[1];
+        let HeaderField { name, value } = bar;
+        assert_eq!("Bar", name);
+        assert_eq!(&HeaderFieldValue::Unstructured("super".to_string()), value);
 
         assert_eq!(Some("Hello".to_string()), eml.body);
     }
