@@ -100,8 +100,6 @@ impl EmlParser {
     ) -> Result<Eml, EmlError> {
         let headers = self.parse_header_fields(&mut char_input)?;
 
-        //self.remove_header_body_separator(&mut char_input)?;
-
         let mut result = Eml::default();
         result.body = self.parse_body();
 
