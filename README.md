@@ -13,16 +13,15 @@ Finding the separator between the header and body follows the following transiti
 You can use `EmlParser` with a `&str` or a filename:
 
 ```rust
-let eml: Eml = EmlParser::from_file("Re: hello.eml")
+let eml: Eml = EmlParser::from_file("Re: hello.eml")?
     .ignore_body()
-    .parse()?
-    .unwrap();
+    .parse()?;
 
-let expected = SingleEmailAddress(NameAndEmailAddress {
+let expected = HeaderFieldValue::SingleEmailAddress(EmailAddress::NameAndEmailAddress {
     name: "Anne Thompson".to_string(),
     address: "anne@example.com".to_string(),
 });
 
-assert_eq!(expected, eml.from);
-assert_eq!("Re: hello", eml.subject);
+assert_eq!(Some(expected), eml.from);
+assert_eq!(Some("Re: hello".to_string()), eml.subject);
 ```

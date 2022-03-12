@@ -289,25 +289,26 @@ impl EmlParser {
 
         while let Some(next_char) = char_input.peek() {
             let ws = EmlParser::next_char_type(*next_char);
+            let len = next_char.len_utf8();
 
             match (&state, ws) {
                 (LwspState::ReadingContent, InputType::WSP)
                 | (LwspState::ReadingContent, InputType::NonWsp) => {
                     // While reading input, anything not CR or LF gets included
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                 }
 
                 (LwspState::ReadingContent, InputType::CR) => {
                     state = LwspState::CR;
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                 }
 
                 (LwspState::ReadingContent, InputType::LF) => {
                     state = LwspState::LF;
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                 }
 
                 (LwspState::LF, InputType::WSP)
@@ -320,7 +321,7 @@ impl EmlParser {
                     // In this case, we return to the ReadingContent state
                     state = LwspState::ReadingContent;
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                 }
 
                 (LwspState::LF, InputType::NonWsp)
@@ -335,21 +336,21 @@ impl EmlParser {
                     // Found the end of the header in the form of LF + LF
                     state = LwspState::EndOfHeader_LFLF;
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                     break;
                 }
                 (LwspState::CR, InputType::CR) => {
                     // Found the end of the header in the form of CR + CR
                     state = LwspState::EndOfHeader_CRCR;
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                     break;
                 }
                 (LwspState::CRLFCR, InputType::LF) => {
                     // Found the end of the header in the form of CRLF + CRLF
                     state = LwspState::EndOfHeader_CRLFCRLF;
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                     break;
                 }
 
@@ -357,14 +358,14 @@ impl EmlParser {
                     // CR+LF will probably lead to CRLF+CRLF
                     state = LwspState::CRLF;
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                 }
 
                 (LwspState::CRLF, InputType::CR) => {
                     // Approaching CRLF+CRLF
                     state = LwspState::CRLFCR;
                     char_input.next();
-                    end_position += 1;
+                    end_position += len;
                 }
 
                 // Rather strict handling of line endings when we're at the border of the header
@@ -523,7 +524,8 @@ This is the start of the body
         assert_eq!(
             HeaderFieldValue::Unstructured(
                 r#"by 2002:a37:aa8e:: with SMTP id t136mr9744838qke.175.1586811847065;
-        Mon, 13 Apr 2020 14:04:07 -0700 (PDT)"#.to_string()
+        Mon, 13 Apr 2020 14:04:07 -0700 (PDT)"#
+                    .to_string()
             ),
             eml.headers[3].value
         );
@@ -649,5 +651,43 @@ This is the start of the body
         assert_eq!(&HeaderFieldValue::Unstructured("super".to_string()), value);
 
         assert_eq!(Some("Hello".to_string()), eml.body);
+    }
+
+    /// See https://github.com/aeshirey/EmlParser/issues/14
+    #[test]
+    fn nonascii() {
+        // This previously gave a incorrect results of "tés" and " ba"
+        let result = EmlParser::from_string("Foo: tést\nBar: bar\n\nHello".to_string())
+            .ignore_body()
+            .parse()
+            .expect("Should parse");
+
+        let headers = result.headers;
+        assert_eq!(2, headers.len());
+
+        let HeaderField { name, value } = &headers[0];
+        assert_eq!("Foo", name);
+        assert_eq!("tést", value.to_string());
+
+        let HeaderField { name, value } = &headers[1];
+        assert_eq!("Bar", name);
+        assert_eq!("bar", value.to_string());
+
+        // This previously crashed due to the letter + diacritic being at the end of a header value
+        let result = EmlParser::from_string("Foo: testé\nBar: bar\n\nHello".to_string())
+            .ignore_body()
+            .parse()
+            .expect("Should parse");
+
+        let headers = result.headers;
+        assert_eq!(2, headers.len());
+
+        let HeaderField { name, value } = &headers[0];
+        assert_eq!("Foo", name);
+        assert_eq!("testé", value.to_string());
+
+        let HeaderField { name, value } = &headers[1];
+        assert_eq!("Bar", name);
+        assert_eq!("bar", value.to_string());
     }
 }
