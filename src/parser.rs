@@ -5,7 +5,7 @@ use std::fs;
 use std::iter::Peekable;
 use std::path::Path;
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug)]
 enum LwspState {
     ReadingContent,
@@ -18,6 +18,7 @@ enum LwspState {
     EndOfHeader_CRLFCRLF,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
 enum InputType {
     CR,
@@ -96,12 +97,16 @@ impl EmlParser {
 
     fn parse_email<T: Iterator<Item = char>>(
         &mut self,
-        mut char_input: &mut Peekable<T>,
+        char_input: &mut Peekable<T>,
     ) -> Result<Eml, EmlError> {
-        let headers = self.parse_header_fields(&mut char_input)?;
+        let headers = self.parse_header_fields(char_input)?;
 
-        let mut result = Eml::default();
-        result.body = self.parse_body();
+        let mut result = Eml {
+            body: self.parse_body(),
+            ..Default::default()
+        };
+        ////let mut result = Eml::default();
+        //result.body =
 
         for header in headers {
             match (&header.name[..], &header.value) {
@@ -119,12 +124,12 @@ impl EmlParser {
 
     fn parse_header_fields<T: Iterator<Item = char>>(
         &mut self,
-        mut char_input: &mut Peekable<T>,
+        char_input: &mut Peekable<T>,
     ) -> Result<Vec<HeaderField>, EmlError> {
         use HeaderFieldValue::*;
         let mut headers = Vec::new();
 
-        while let Some((name, value, eoh)) = self.read_raw_header_field(&mut char_input)? {
+        while let Some((name, value, eoh)) = self.read_raw_header_field(char_input)? {
             // Attempt to structure this header value
             let value = match (&name[..], value) {
                 ("From", v)
@@ -134,7 +139,10 @@ impl EmlParser {
                 | ("X-Original-To", v)
                 | ("Return-Path", v) => EmlParser::parse_email_address(v),
                 (_, v) if v.is_empty() => Empty,
-                (_, v) => Unstructured(v),
+                (_, v) => match rfc2047_decoder::decode(&v) {
+                    Ok(decoded) => Unstructured(decoded),
+                    Err(_) => Unstructured(v),
+                },
             };
             headers.push(HeaderField { name, value });
 
@@ -147,7 +155,7 @@ impl EmlParser {
 
     fn parse_email_address(value: String) -> HeaderFieldValue {
         // Email address header values can span multiple lines. Clean those up first
-        let mut remaining = value.replace("\n", "").replace("\r", "");
+        let mut remaining = value.replace(['\n', '\r'], "");
 
         let mut found_addresses = Vec::new();
 
@@ -191,7 +199,7 @@ impl EmlParser {
 
     fn read_raw_header_field<T: Iterator<Item = char>>(
         &mut self,
-        mut char_input: &mut Peekable<T>,
+        char_input: &mut Peekable<T>,
     ) -> Result<Option<(String, String, bool)>, EmlError> {
         match char_input.peek() {
             Some('\n') | Some('\r') => return Ok(None), // finding a CR or LF when looking for a header means the body is about to start
@@ -203,7 +211,7 @@ impl EmlParser {
             }
         };
 
-        if let Some(name) = self.read_field_name(&mut char_input)? {
+        if let Some(name) = self.read_field_name(char_input)? {
             match char_input.peek() {
                 Some(':') => {
                     self.position += 1;
@@ -237,7 +245,7 @@ impl EmlParser {
                 }
             };
 
-            let (value, eoh) = self.read_field_body(&mut char_input)?;
+            let (value, eoh) = self.read_field_body(char_input)?;
 
             Ok(Some((name, value, eoh)))
         } else {
@@ -278,7 +286,9 @@ impl EmlParser {
         }
     }
 
-    // Read until we've found a CRLF that does NOT have white whitespace after it
+    /// Read until we've found a CRLF that does NOT have white whitespace after it.
+    ///
+    /// On success, this returns the body and a bool indicating end-of-header.
     fn read_field_body<T: Iterator<Item = char>>(
         &mut self,
         char_input: &mut Peekable<T>,
@@ -419,12 +429,12 @@ impl EmlParser {
                 LwspState::ReadingContent | LwspState::CRLFCR => unreachable!(),
             };
 
-        let end_of_header = match state {
+        let end_of_header = matches!(
+            state,
             LwspState::EndOfHeader_LFLF
-            | LwspState::EndOfHeader_CRCR
-            | LwspState::EndOfHeader_CRLFCRLF => true,
-            _ => false,
-        };
+                | LwspState::EndOfHeader_CRCR
+                | LwspState::EndOfHeader_CRLFCRLF
+        );
 
         Ok((
             String::from(&self.content[start_position..value_end]),
