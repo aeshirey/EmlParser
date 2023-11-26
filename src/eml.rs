@@ -32,9 +32,9 @@ pub struct Eml {
 impl fmt::Display for EmailAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            EmailAddress::AddressOnly { address } => write!(f, "{}", address),
+            EmailAddress::AddressOnly { address } => write!(f, "{address}"),
             EmailAddress::NameAndEmailAddress { name, address } => {
-                write!(f, r#""{}" <{}>"#, name, address)
+                write!(f, r#""{name}" <{address}>"#)
             }
         }
     }
@@ -45,7 +45,7 @@ impl fmt::Display for EmailAddress {
 impl fmt::Display for HeaderFieldValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            HeaderFieldValue::SingleEmailAddress(address) => write!(f, "{}", address.to_string()),
+            HeaderFieldValue::SingleEmailAddress(address) => write!(f, "{address}"),
             HeaderFieldValue::MultipleEmailAddresses(addresses) => {
                 // A probably acceptable heurestic for pre-allocating some memory
                 let mut combined = String::with_capacity(20 * addresses.len());
@@ -55,9 +55,9 @@ impl fmt::Display for HeaderFieldValue {
                     }
                     combined.push_str(&a.to_string());
                 });
-                write!(f, "{}", &combined)
+                write!(f, "{combined}")
             }
-            HeaderFieldValue::Unstructured(s) => write!(f, "{}", s),
+            HeaderFieldValue::Unstructured(s) => write!(f, "{s}"),
             HeaderFieldValue::Empty => write!(f, ""),
         }
     }
