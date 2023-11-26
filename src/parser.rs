@@ -700,4 +700,27 @@ This is the start of the body
         assert_eq!("Bar", name);
         assert_eq!("bar", value.to_string());
     }
+
+    #[test]
+    fn test_parse_phishing_emails() {
+        for n in 0..10 {
+            let filename = format!("test_emails/{n}.eml");
+
+            let mut e = EmlParser::from_file(&filename).expect("Load file");
+            let _parsed = e.parse().expect("Parse file");
+        }
+    }
+
+    #[test]
+    fn test_parse_rfc2047() {
+        let mut e = EmlParser::from_file("test_emails/rfc2047.eml").unwrap();
+        let parsed = e.parse().expect("Parse rfc2047.eml");
+        let schöne = HeaderFieldValue::Unstructured("Schöne Grüße".to_string());
+
+        for h in parsed.headers {
+            if h.name == "Salutation" {
+                assert_eq!(h.value, schöne);
+            }
+        }
+    }
 }
