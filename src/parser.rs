@@ -267,8 +267,8 @@ impl EmlParser {
                 // header
                 return Ok(None);
             } else if c != &' ' && c != &':' && !c.is_control() {
+                end_position += c.len_utf8();
                 char_input.next();
-                end_position += 1;
             } else {
                 break;
             }
@@ -466,7 +466,8 @@ impl EmlParser {
                 //let bytes = if bytes > bytes_remaining { bytes_remaining } else { bytes }
 
                 Some(String::from(
-                    &self.content[self.position..self.position + bytes],
+                    &self.content
+                        [self.position..self.content.floor_char_boundary(self.position + bytes)],
                 ))
             }
             BodyHandling::All => Some(String::from(&self.content[self.position..])),
@@ -574,6 +575,17 @@ This is the start of the body
 
         let body = eml.body.unwrap();
         assert_eq!("This is the start of the body\n", body);
+    }
+
+    #[test]
+    fn body_truncated_in_multibyte_char() {
+        let result = EmlParser::from_string("Foo: ok\n\nBá".to_string())
+            .with_body_preview(2)
+            .parse()
+            .unwrap();
+
+        let body = result.body.unwrap();
+        assert_eq!("B", body);
     }
 
     #[test]
@@ -699,6 +711,19 @@ This is the start of the body
         let HeaderField { name, value } = &headers[1];
         assert_eq!("Bar", name);
         assert_eq!("bar", value.to_string());
+
+        // This previously crashed due to the letter + diacritic being at the end of a header name
+        let result = EmlParser::from_string("ō: test\n\n".to_string())
+            .ignore_body()
+            .parse()
+            .unwrap();
+
+        let headers = result.headers;
+        assert_eq!(1, headers.len());
+
+        let HeaderField { name, value } = &headers[0];
+        assert_eq!("ō", name);
+        assert_eq!("test", value.to_string());
     }
 
     #[test]
