@@ -1,6 +1,6 @@
 [package]
 name = "eml-parser"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Adam Shirey <adam@shirey.ch>"]
 edition = "2021"
 description = "A library for parsing .eml files."
@@ -20,4 +20,4 @@ exclude = [
 
 [dependencies]
 regex = "1"
-rfc2047-decoder = "1.0.1"
+rfc2047-decoder = "1.0"
