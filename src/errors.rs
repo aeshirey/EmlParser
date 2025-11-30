@@ -1,6 +1,4 @@
-use std::error;
-use std::fmt;
-use std::io;
+use std::{error, fmt, io};
 
 #[derive(Debug)]
 pub enum EmlError {

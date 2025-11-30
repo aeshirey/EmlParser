@@ -1,9 +1,9 @@
+use std::{fs, iter::Peekable, path::Path, sync::LazyLock};
+
+use regex::Regex;
+
 use crate::eml::*;
 use crate::errors::EmlError;
-use regex::Regex;
-use std::fs;
-use std::iter::Peekable;
-use std::path::Path;
 
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug)]
@@ -41,6 +41,18 @@ pub struct EmlParser {
 
     body_handling: BodyHandling,
 }
+
+/// for matching: "John Smith" <jsmith@example.com>
+static NAME_ADDR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^"(.?+)" <\s*([^>]+)\s*>[ ,]*"#).unwrap());
+
+/// for matching the email in brackets without name: <jsmith@example.com>
+static ADDR_RE1: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^\s*<\s*([^>]+)\s*>[ ,]*"#).unwrap());
+
+/// for matching the email without brackets: jsmith@example.com
+static ADDR_RE2: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^\s*([^"<>@]+@[^"<>@\s,]+)[ ,]*"#).unwrap());
 
 impl EmlParser {
     /// Read an .eml file from disk, parsing its contents.
@@ -105,8 +117,6 @@ impl EmlParser {
             body: self.parse_body(),
             ..Default::default()
         };
-        ////let mut result = Eml::default();
-        //result.body =
 
         for header in headers {
             match (&header.name[..], &header.value) {
@@ -159,25 +169,21 @@ impl EmlParser {
 
         let mut found_addresses = Vec::new();
 
-        let name_addr_re = Regex::new(r#"^"(.?+)" <\s*([^>]+)\s*>[ ,]*"#).unwrap(); // for matching: "John Smith" <jsmith@example.com>
-        let addr_re1 = Regex::new(r#"^\s*<\s*([^>]+)\s*>[ ,]*"#).unwrap(); // for matching the email in brackets without name: <jsmith@example.com>
-        let addr_re2 = Regex::new(r#"^\s*([^"<>@]+@[^"<>@\s,]+)[ ,]*"#).unwrap(); // for matching the email without brackets: jsmith@example.com
-
         while !remaining.is_empty() {
-            if let Some(cap) = name_addr_re.captures(&remaining) {
+            if let Some(cap) = NAME_ADDR_RE.captures(&remaining) {
                 let name = cap.get(1).unwrap().as_str().to_string();
                 let address = cap.get(2).unwrap().as_str().to_string();
                 found_addresses.push(EmailAddress::NameAndEmailAddress { name, address });
 
                 let entire_match = cap.get(0).unwrap();
                 remaining = remaining[entire_match.end()..].to_string();
-            } else if let Some(cap) = addr_re1.captures(&remaining) {
+            } else if let Some(cap) = ADDR_RE1.captures(&remaining) {
                 let address = cap.get(1).unwrap().as_str().to_string();
                 found_addresses.push(EmailAddress::AddressOnly { address });
 
                 let entire_match = cap.get(0).unwrap();
                 remaining = remaining[entire_match.end()..].to_string();
-            } else if let Some(cap) = addr_re2.captures(&remaining) {
+            } else if let Some(cap) = ADDR_RE2.captures(&remaining) {
                 let address = cap.get(1).unwrap().as_str().to_string();
                 found_addresses.push(EmailAddress::AddressOnly { address });
 
@@ -461,9 +467,7 @@ impl EmlParser {
             BodyHandling::None => None,
             BodyHandling::Preview(bytes) => {
                 let bytes_remaining = self.content.len() - self.position;
-                let bytes = std::cmp::min(bytes, bytes_remaining);
-
-                //let bytes = if bytes > bytes_remaining { bytes_remaining } else { bytes }
+                let bytes = bytes.min(bytes_remaining);
 
                 Some(String::from(
                     &self.content
@@ -477,7 +481,6 @@ impl EmlParser {
 
 #[cfg(test)]
 mod tests {
-    use super::HeaderFieldValue;
     use super::*;
 
     const TEST_HEADER: &str = r#"Delivered-To: john.public@example.com
