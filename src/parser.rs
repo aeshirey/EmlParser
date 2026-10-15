@@ -44,7 +44,7 @@ pub struct EmlParser {
 
 /// for matching: "John Smith" <jsmith@example.com>
 static NAME_ADDR_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^"(.?+)" <\s*([^>]+)\s*>[ ,]*"#).unwrap());
+    LazyLock::new(|| Regex::new(r#"^(?:"(.+?)"|(.+?)) <\s*([^>]+)\s*>[ ,]*"#).unwrap());
 
 /// for matching the email in brackets without name: <jsmith@example.com>
 static ADDR_RE1: LazyLock<Regex> =
@@ -171,8 +171,10 @@ impl EmlParser {
 
         while !remaining.is_empty() {
             if let Some(cap) = NAME_ADDR_RE.captures(&remaining) {
-                let name = cap.get(1).unwrap().as_str().to_string();
-                let address = cap.get(2).unwrap().as_str().to_string();
+                let name_match = cap.get(1).unwrap_or_else(|| cap.get(2).unwrap());
+                let name = name_match.as_str().to_string();
+
+                let address = cap.get(3).unwrap().as_str().to_string();
                 found_addresses.push(EmailAddress::NameAndEmailAddress { name, address });
 
                 let entire_match = cap.get(0).unwrap();
@@ -607,7 +609,7 @@ This is the start of the body
 
     #[test]
     fn parse_and_display_emails() {
-        let single = r#""John Q. Public" < john@example.com>, "#.to_string();
+        let single = r#"John Q. Public < john@example.com>, "#.to_string();
         let parsed = EmlParser::parse_email_address(single);
 
         match &parsed {
