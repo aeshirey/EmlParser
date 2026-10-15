@@ -42,9 +42,14 @@ pub struct EmlParser {
     body_handling: BodyHandling,
 }
 
-/// for matching: "John Smith" <jsmith@example.com>
+/// For matching: `"John Smith" <jsmith@example.com>` or `John Smith <jsmith@example.com>`
+///
+/// According to [RFC 5322 Section 3.2.5](https://www.rfc-editor.org/info/rfc5322/#section-3.2.5), it appears that
+/// the display name may be quoted or unquoted.
+///
+/// See [Issue 17](https://github.com/aeshirey/EmlParser/issues/17) / [PR 18](https://github.com/aeshirey/EmlParser/pull/18/)
 static NAME_ADDR_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^"(.?+)" <\s*([^>]+)\s*>[ ,]*"#).unwrap());
+    LazyLock::new(|| Regex::new(r#"^(?:"([^"]+?)"|([^"]+?)) <\s*([^>]+)\s*>[ ,]*"#).unwrap());
 
 /// for matching the email in brackets without name: <jsmith@example.com>
 static ADDR_RE1: LazyLock<Regex> =
@@ -171,8 +176,10 @@ impl EmlParser {
 
         while !remaining.is_empty() {
             if let Some(cap) = NAME_ADDR_RE.captures(&remaining) {
-                let name = cap.get(1).unwrap().as_str().to_string();
-                let address = cap.get(2).unwrap().as_str().to_string();
+                let name_match = cap.get(1).unwrap_or_else(|| cap.get(2).unwrap());
+                let name = name_match.as_str().to_string();
+
+                let address = cap.get(3).unwrap().as_str().to_string();
                 found_addresses.push(EmailAddress::NameAndEmailAddress { name, address });
 
                 let entire_match = cap.get(0).unwrap();
@@ -607,21 +614,47 @@ This is the start of the body
 
     #[test]
     fn parse_and_display_emails() {
-        let single = r#""John Q. Public" < john@example.com>, "#.to_string();
-        let parsed = EmlParser::parse_email_address(single);
+        // The same email twice, but once uses the quoted version ("John Q. Public")
+        // and the other uses unquoted (John Q. Public), both of which are allowed.
+        let singles = [
+            r#""John Q. Public" < john@example.com>, "#.to_string(),
+            r#"John Q. Public < john@example.com>, "#.to_string(),
+        ];
 
-        match &parsed {
-            HeaderFieldValue::SingleEmailAddress(EmailAddress::NameAndEmailAddress {
-                name,
-                address,
-            }) => {
-                assert_eq!(name, "John Q. Public");
-                assert_eq!(address, "john@example.com");
+        for single in singles {
+            let parsed = EmlParser::parse_email_address(single);
+
+            match &parsed {
+                HeaderFieldValue::SingleEmailAddress(EmailAddress::NameAndEmailAddress {
+                    name,
+                    address,
+                }) => {
+                    assert_eq!(name, "John Q. Public");
+                    assert_eq!(address, "john@example.com");
+                }
+                _ => panic!("Expected SingleEmailAddress, got something else"),
+            };
+
+            assert_eq!(parsed.to_string(), r#""John Q. Public" <john@example.com>"#);
+        }
+    }
+
+    #[test]
+    fn quoted_display_must_be_balanced() {
+        // The same email twice, but once uses the quoted version ("John Q. Public")
+        // and the other uses unquoted (John Q. Public), both of which are allowed.
+        let singles = [
+            r#"John Q. Public" < john@example.com>, "#.to_string(),
+            r#""John Q. Public < john@example.com>, "#.to_string(),
+        ];
+
+        for single in singles {
+            let parsed = EmlParser::parse_email_address(single);
+
+            if !matches!(parsed, HeaderFieldValue::Unstructured(_)) {
+                panic!("Expected Unstructured, got something else");
             }
-            _ => panic!("Expected SingleEmailAddress, got something else"),
-        };
-
-        assert_eq!(parsed.to_string(), r#""John Q. Public" <john@example.com>"#);
+        }
     }
 
     #[test]
