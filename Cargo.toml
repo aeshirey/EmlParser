@@ -1,6 +1,6 @@
 [package]
 name = "eml-parser"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["Adam Shirey <adam@shirey.ch>"]
 edition = "2021"
 description = "A library for parsing .eml files."
